@@ -3,7 +3,17 @@ import AppKit
 
 struct AppsVolumeView: View {
     @EnvironmentObject var audioState: AudioState
-    @StateObject private var appManager = AppAudioViewModel()
+    @StateObject private var appManager = AppAudioManager()
+    @State private var searchText: String = ""
+
+    private var filteredApps: [AudioApp] {
+        if searchText.isEmpty {
+            return appManager.runningApps
+        }
+        return appManager.runningApps.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText)
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -13,6 +23,14 @@ struct AppsVolumeView: View {
                     .font(.headline)
                 Spacer()
                 Button {
+                    resetAllVolumes()
+                } label: {
+                    Text("Reset All")
+                        .font(.caption)
+                }
+                .help("Reset all app volumes to 100%")
+
+                Button {
                     appManager.refresh()
                 } label: {
                     Image(systemName: "arrow.clockwise")
@@ -21,18 +39,46 @@ struct AppsVolumeView: View {
             }
             .padding()
 
+            // Search field
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                TextField("Filter apps...", text: $searchText)
+                    .textFieldStyle(.plain)
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(8)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .cornerRadius(8)
+            .padding(.horizontal)
+            .padding(.bottom, 8)
+
             Divider()
 
-            if appManager.runningApps.isEmpty {
+            if filteredApps.isEmpty {
                 Spacer()
                 VStack(spacing: 12) {
-                    Image(systemName: "speaker.badge.exclamationmark")
+                    Image(systemName: searchText.isEmpty
+                        ? "speaker.badge.exclamationmark"
+                        : "magnifyingglass")
                         .font(.system(size: 40))
                         .foregroundColor(.secondary)
-                    Text("No audio apps detected")
+                    Text(searchText.isEmpty
+                        ? "No audio apps detected"
+                        : "No matching apps")
                         .font(.title3)
                         .foregroundColor(.secondary)
-                    Text("Apps playing audio will appear here.\nThe audio driver must be installed for per-app control.")
+                    Text(searchText.isEmpty
+                        ? "Apps playing audio will appear here.\nThe audio driver must be installed for per-app control."
+                        : "Try a different search term.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -40,18 +86,30 @@ struct AppsVolumeView: View {
                 Spacer()
             } else {
                 List {
-                    ForEach(appManager.runningApps, id: \.bundleID) { app in
+                    ForEach(filteredApps) { app in
                         AppVolumeRow(
                             appName: app.name,
                             appIcon: app.icon,
                             volume: Binding(
-                                get: { audioState.appVolumes[app.bundleID] ?? 1.0 },
-                                set: { audioState.setAppVolume(bundleID: app.bundleID, volume: $0) }
+                                get: { audioState.appVolumes[app.id] ?? 1.0 },
+                                set: { audioState.setAppVolume(bundleID: app.id, volume: $0) }
                             )
                         )
                     }
                 }
             }
+        }
+        .onAppear {
+            appManager.startRefreshTimer()
+        }
+        .onDisappear {
+            appManager.stopRefreshTimer()
+        }
+    }
+
+    private func resetAllVolumes() {
+        for app in appManager.runningApps {
+            audioState.setAppVolume(bundleID: app.id, volume: 1.0)
         }
     }
 }
@@ -85,40 +143,6 @@ struct AppVolumeRow: View {
                 .frame(width: 48, alignment: .trailing)
         }
         .padding(.vertical, 4)
-    }
-}
-
-// MARK: - ViewModel for running apps
-
-struct AudioApp: Identifiable {
-    let id = UUID()
-    let bundleID: String
-    let name: String
-    let icon: NSImage
-}
-
-class AppAudioViewModel: ObservableObject {
-    @Published var runningApps: [AudioApp] = []
-
-    init() {
-        refresh()
-    }
-
-    func refresh() {
-        let workspace = NSWorkspace.shared
-        let apps = workspace.runningApplications
-            .filter { $0.activationPolicy == .regular }
-            .compactMap { app -> AudioApp? in
-                guard let bundleID = app.bundleIdentifier,
-                      let name = app.localizedName else { return nil }
-                let icon = app.icon ?? NSImage(systemSymbolName: "app", accessibilityDescription: nil) ?? NSImage()
-                return AudioApp(bundleID: bundleID, name: name, icon: icon)
-            }
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-
-        DispatchQueue.main.async {
-            self.runningApps = apps
-        }
     }
 }
 

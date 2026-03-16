@@ -49,7 +49,7 @@ struct AboutView: View {
             // Links
             HStack(spacing: 16) {
                 Button {
-                    if let url = URL(string: "https://github.com/kylekumar/why-is-my-audio-low-on-mac") {
+                    if let url = URL(string: "https://github.com/ergophobian/why-is-my-audio-low-on-mac") {
                         NSWorkspace.shared.open(url)
                     }
                 } label: {
@@ -61,7 +61,7 @@ struct AboutView: View {
                 .buttonStyle(.link)
 
                 Button {
-                    if let url = URL(string: "https://github.com/kylekumar/why-is-my-audio-low-on-mac/issues") {
+                    if let url = URL(string: "https://github.com/ergophobian/why-is-my-audio-low-on-mac/issues") {
                         NSWorkspace.shared.open(url)
                     }
                 } label: {

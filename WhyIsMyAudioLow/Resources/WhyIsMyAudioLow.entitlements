@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- No sandbox — required to access CoreAudio HAL devices and install driver -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+
+    <!-- Hardened runtime exceptions -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+
+    <!-- AppleScript for driver installation with admin privileges -->
+    <key>com.apple.security.scripting-targets</key>
+    <dict/>
+</dict>
+</plist>
