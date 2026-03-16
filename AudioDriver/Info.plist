@@ -5,26 +5,39 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>WhyIsMyAudioLowDriver</string>
+    <string>AudioBoostDriver</string>
     <key>CFBundleIdentifier</key>
-    <string>com.kylekumar.WhyIsMyAudioLow.AudioDriver</string>
+    <string>com.whyismyaudiolow.driver</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>WhyIsMyAudioLow Audio Driver</string>
+    <string>AudioBoost Driver</string>
     <key>CFBundlePackageType</key>
     <string>BNDL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
+    <string>1.0.0</string>
     <key>CFBundleVersion</key>
     <string>1</string>
-    <key>AudioServerPlugIn</key>
+
+    <!-- CoreFoundation Plugin Registration -->
+    <key>CFPlugInDynamicRegistration</key>
+    <string>NO</string>
+
+    <!-- Map our factory UUID to the C factory function -->
+    <key>CFPlugInFactories</key>
     <dict>
-        <key>com.apple.audio.CoreAudio.driver</key>
-        <dict>
-            <key>factory function</key>
-            <string>WhyIsMyAudioLow_Create</string>
-        </dict>
+        <key>147EE600-0815-4D6D-898E-A4DDE19228E1</key>
+        <string>AudioBoost_Create</string>
+    </dict>
+
+    <!-- Map the AudioServerPlugIn type UUID to our factory UUID -->
+    <!-- 443ABAB8-E7B3-491A-B985-BEB9187030DB = kAudioServerPlugInTypeUUID -->
+    <key>CFPlugInTypes</key>
+    <dict>
+        <key>443ABAB8-E7B3-491A-B985-BEB9187030DB</key>
+        <array>
+            <string>147EE600-0815-4D6D-898E-A4DDE19228E1</string>
+        </array>
     </dict>
 </dict>
 </plist>
