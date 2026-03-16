@@ -1,7 +1,16 @@
 import SwiftUI
+import AppKit
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Allow the app to become active and open windows even without a Dock icon
+        NSApp.setActivationPolicy(.accessory)
+    }
+}
 
 @main
 struct WhyIsMyAudioLowApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var audioState = AudioState()
 
     var body: some Scene {

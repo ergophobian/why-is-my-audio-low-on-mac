@@ -74,8 +74,7 @@ struct MenuBarView: View {
 
             // Settings button
             Button {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                NSApp.activate(ignoringOtherApps: true)
+                SettingsWindowController.shared.showSettings(audioState: audioState)
             } label: {
                 HStack {
                     Image(systemName: "gear")
