@@ -1,9 +1,19 @@
 import SwiftUI
+import CoreAudio
+
+struct OutputDevice: Identifiable, Hashable {
+    let id: AudioDeviceID
+    let name: String
+}
 
 struct GeneralSettingsView: View {
     @EnvironmentObject var audioState: AudioState
-    @State private var driverInstalled: Bool = false
-    @State private var showingDriverAlert: Bool = false
+    @State private var driverInstalled = DriverInstaller.isDriverInstalled
+    @State private var showingInstallAlert = false
+    @State private var showingUninstallAlert = false
+    @State private var statusMessage = ""
+    @State private var showingStatus = false
+    @State private var outputDevices: [OutputDevice] = []
 
     var body: some View {
         Form {
@@ -15,10 +25,15 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                Picker("Default output device", selection: .constant("System Default")) {
-                    Text("System Default").tag("System Default")
-                    Text("Built-in Output").tag("Built-in Output")
-                    Text("Audio Boost (Virtual)").tag("Audio Boost (Virtual)")
+                let selectedID = audioState.outputDeviceID ?? 0
+                Picker("Default output device", selection: Binding<AudioDeviceID>(
+                    get: { selectedID },
+                    set: { audioState.outputDeviceID = $0 == 0 ? nil : $0 }
+                )) {
+                    Text("System Default").tag(AudioDeviceID(0))
+                    ForEach(outputDevices) { device in
+                        Text(device.name).tag(device.id)
+                    }
                 }
             } header: {
                 Text("Output")
@@ -34,62 +49,67 @@ struct GeneralSettingsView: View {
                         }
                         .font(.body)
 
-                        Text("The virtual audio driver is required for volume boost beyond 100% and per-app volume control.")
+                        Text("The virtual audio driver is required for system-wide volume boost and EQ.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
 
                     Spacer()
 
-                    Button(driverInstalled ? "Reinstall Driver" : "Install Driver") {
-                        showingDriverAlert = true
-                    }
-                    .alert("Install Audio Driver", isPresented: $showingDriverAlert) {
-                        Button("Install", role: .destructive) {
-                            installDriver()
+                    if driverInstalled {
+                        Button("Uninstall") {
+                            showingUninstallAlert = true
                         }
+                        .alert("Uninstall Driver", isPresented: $showingUninstallAlert) {
+                            Button("Uninstall", role: .destructive) { uninstallDriver() }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("This will remove the virtual audio driver. Volume boost and EQ will stop working.")
+                        }
+                    }
+
+                    Button(driverInstalled ? "Reinstall" : "Install Driver") {
+                        showingInstallAlert = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .alert("Install Audio Driver", isPresented: $showingInstallAlert) {
+                        Button("Install") { installDriver() }
                         Button("Cancel", role: .cancel) {}
                     } message: {
-                        Text("This will install a virtual audio driver as a System Extension. You may be prompted for administrator access.")
+                        Text("This will install a virtual audio driver to enable system-wide audio processing. You'll be prompted for your admin password.")
                     }
                 }
             } header: {
                 Text("Audio Driver")
             }
-
-            Section {
-                HStack {
-                    Text("Processing quality")
-                    Spacer()
-                    Picker("", selection: .constant("High")) {
-                        Text("Low (less CPU)").tag("Low")
-                        Text("Medium").tag("Medium")
-                        Text("High").tag("High")
-                    }
-                    .frame(width: 160)
-                }
-
-                HStack {
-                    Text("Buffer size")
-                    Spacer()
-                    Picker("", selection: .constant(512)) {
-                        Text("256 samples").tag(256)
-                        Text("512 samples").tag(512)
-                        Text("1024 samples").tag(1024)
-                    }
-                    .frame(width: 160)
-                }
-            } header: {
-                Text("Advanced")
-            }
         }
         .formStyle(.grouped)
         .padding()
+        .onAppear {
+            outputDevices = audioState.audioEngine.listOutputDevices().map { OutputDevice(id: $0.id, name: $0.name) }
+            driverInstalled = DriverInstaller.isDriverInstalled
+        }
+        .alert("Driver Status", isPresented: $showingStatus) {
+            Button("OK") {}
+        } message: {
+            Text(statusMessage)
+        }
     }
 
     private func installDriver() {
-        // Placeholder: In production, this would trigger System Extension installation
-        driverInstalled = true
+        DriverInstaller.installDriver { success, message in
+            statusMessage = message
+            showingStatus = true
+            driverInstalled = DriverInstaller.isDriverInstalled
+        }
+    }
+
+    private func uninstallDriver() {
+        DriverInstaller.uninstallDriver { success, message in
+            statusMessage = message
+            showingStatus = true
+            driverInstalled = DriverInstaller.isDriverInstalled
+        }
     }
 }
 
