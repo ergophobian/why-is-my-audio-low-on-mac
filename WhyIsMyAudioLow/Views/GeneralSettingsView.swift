@@ -8,11 +8,9 @@ struct OutputDevice: Identifiable, Hashable {
 
 struct GeneralSettingsView: View {
     @EnvironmentObject var audioState: AudioState
-    @State private var driverInstalled = DriverInstaller.isDriverInstalled
-    @State private var showingInstallAlert = false
-    @State private var showingUninstallAlert = false
-    @State private var statusMessage = ""
-    @State private var showingStatus = false
+    @State private var showingInstallStatus = false
+    @State private var installStatusMessage = ""
+    @State private var isInstalling = false
     @State private var outputDevices: [OutputDevice] = []
 
     var body: some View {
@@ -26,89 +24,120 @@ struct GeneralSettingsView: View {
 
             Section {
                 let selectedID = audioState.outputDeviceID ?? 0
-                Picker("Default output device", selection: Binding<AudioDeviceID>(
+                Picker("Output device (headphones/speakers)", selection: Binding<AudioDeviceID>(
                     get: { selectedID },
-                    set: { audioState.outputDeviceID = $0 == 0 ? nil : $0 }
+                    set: { newValue in
+                        audioState.outputDeviceID = newValue == 0 ? nil : newValue
+                        if newValue != 0 {
+                            audioState.audioEngine.setOutputDevice(newValue)
+                        }
+                    }
                 )) {
-                    Text("System Default").tag(AudioDeviceID(0))
+                    Text("Auto-detect").tag(AudioDeviceID(0))
                     ForEach(outputDevices) { device in
                         Text(device.name).tag(device.id)
                     }
                 }
+
+                Text("This is where you hear audio. BlackHole captures it first, then routes it here after processing.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             } header: {
                 Text("Output")
             }
 
             Section {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            Image(systemName: driverInstalled ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundColor(driverInstalled ? .green : .red)
-                            Text(driverInstalled ? "Audio driver installed" : "Audio driver not installed")
-                        }
+                // Installation status
+                HStack(spacing: 8) {
+                    Image(systemName: audioState.isBlackHoleInstalled ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .foregroundColor(audioState.isBlackHoleInstalled ? .green : .red)
                         .font(.body)
 
-                        Text("The virtual audio driver is required for system-wide volume boost and EQ.")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(audioState.isBlackHoleInstalled ? "BlackHole 2ch installed" : "BlackHole 2ch not installed")
+                            .font(.body)
+                        Text("Free open-source virtual audio driver (MIT license)")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
 
                     Spacer()
 
-                    if driverInstalled {
-                        Button("Uninstall") {
-                            showingUninstallAlert = true
+                    if !audioState.isBlackHoleInstalled {
+                        Button {
+                            installBlackHole()
+                        } label: {
+                            if isInstalling {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .padding(.trailing, 4)
+                            }
+                            Text(isInstalling ? "Installing..." : "Install BlackHole")
                         }
-                        .alert("Uninstall Driver", isPresented: $showingUninstallAlert) {
-                            Button("Uninstall", role: .destructive) { uninstallDriver() }
-                            Button("Cancel", role: .cancel) {}
-                        } message: {
-                            Text("This will remove the virtual audio driver. Volume boost and EQ will stop working.")
-                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isInstalling)
                     }
+                }
 
-                    Button(driverInstalled ? "Reinstall" : "Install Driver") {
-                        showingInstallAlert = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .alert("Install Audio Driver", isPresented: $showingInstallAlert) {
-                        Button("Install") { installDriver() }
-                        Button("Cancel", role: .cancel) {}
-                    } message: {
-                        Text("This will install a virtual audio driver to enable system-wide audio processing. You'll be prompted for your admin password.")
+                // Routing status
+                if audioState.isBlackHoleInstalled {
+                    HStack(spacing: 8) {
+                        Image(systemName: audioState.isAudioBoostActive ? "arrow.triangle.branch" : "minus.circle")
+                            .foregroundColor(audioState.isAudioBoostActive ? .blue : .secondary)
+                            .font(.body)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Audio routing: \(audioState.routingStatus)")
+                                .font(.body)
+
+                            if audioState.isAudioBoostActive, let origDevice = audioState.originalOutputDevice {
+                                Text("Will restore to \"\(origDevice)\" when disabled")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        Spacer()
+
+                        if audioState.isAudioBoostActive {
+                            Button("Disable Audio Boost") {
+                                audioState.disableAudioBoost()
+                            }
+                            .buttonStyle(.bordered)
+                        } else {
+                            Button("Enable Audio Boost") {
+                                audioState.enableAudioBoost()
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
                     }
                 }
             } header: {
-                Text("Audio Driver")
+                Text("BlackHole Setup")
             }
         }
         .formStyle(.grouped)
         .padding()
         .onAppear {
-            outputDevices = audioState.audioEngine.listOutputDevices().map { OutputDevice(id: $0.id, name: $0.name) }
-            driverInstalled = DriverInstaller.isDriverInstalled
+            audioState.refreshBlackHoleStatus()
+            outputDevices = audioState.audioEngine.listOutputDevices().map {
+                OutputDevice(id: $0.id, name: $0.name)
+            }
         }
-        .alert("Driver Status", isPresented: $showingStatus) {
+        .alert("BlackHole Setup", isPresented: $showingInstallStatus) {
             Button("OK") {}
         } message: {
-            Text(statusMessage)
+            Text(installStatusMessage)
         }
     }
 
-    private func installDriver() {
-        DriverInstaller.installDriver { success, message in
-            statusMessage = message
-            showingStatus = true
-            driverInstalled = DriverInstaller.isDriverInstalled
-        }
-    }
-
-    private func uninstallDriver() {
-        DriverInstaller.uninstallDriver { success, message in
-            statusMessage = message
-            showingStatus = true
-            driverInstalled = DriverInstaller.isDriverInstalled
+    private func installBlackHole() {
+        isInstalling = true
+        BlackHoleSetup.install { success, message in
+            isInstalling = false
+            installStatusMessage = message
+            showingInstallStatus = true
+            audioState.refreshBlackHoleStatus()
         }
     }
 }
